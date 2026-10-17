@@ -37,6 +37,14 @@ class PlatformVcsMappingService(private val project: Project) : VcsMappingServic
         VcsConfiguration.getInstance(project).removeFromIgnoredUnregisteredRoots(listOf(directory))
     }
 
+    override fun detectedRoots(): List<Mapping> {
+        return VcsRootDetector.getInstance(project).detect()
+            .mapNotNull { root ->
+                val vcsName = root.vcs?.name ?: return@mapNotNull null
+                Mapping(MappingLogic.normalizeDirectory(root.path.path), vcsName)
+            }
+    }
+
     override fun requestRescan() {
         // публичного API запуска VcsRootScanner в 262 нет (impl-модуль вне
         // compile classpath плагина); getOrDetect() выполняет обнаружение

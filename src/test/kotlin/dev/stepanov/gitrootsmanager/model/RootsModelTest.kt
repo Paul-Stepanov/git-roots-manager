@@ -46,4 +46,64 @@ class RootsModelTest {
         )
         assertEquals(listOf(ManagedRoot("/b", "Git", tracked = true)), result)
     }
+
+    @Test
+    fun expandDropsDefaultMappingAndUsesDetected() {
+        val result = RootsModel.expandDefaultMapping(
+            mappings = listOf(Mapping("", "Git")),
+            detected = listOf(Mapping("/a", "Git"), Mapping("/b", "Git")),
+            exclude = emptySet(),
+        )
+        assertEquals(listOf(Mapping("/a", "Git"), Mapping("/b", "Git")), result)
+    }
+
+    @Test
+    fun expandExcludesDisabledRoots() {
+        val result = RootsModel.expandDefaultMapping(
+            mappings = listOf(Mapping("", "Git")),
+            detected = listOf(Mapping("/a", "Git"), Mapping("/b", "Git")),
+            exclude = setOf("/b"),
+        )
+        assertEquals(listOf(Mapping("/a", "Git")), result)
+    }
+
+    @Test
+    fun expandKeepsExplicitMappingsNotInDetected() {
+        val result = RootsModel.expandDefaultMapping(
+            mappings = listOf(Mapping("", "Git"), Mapping("/x", "SVN")),
+            detected = listOf(Mapping("/a", "Git")),
+            exclude = emptySet(),
+        )
+        assertEquals(listOf(Mapping("/x", "SVN"), Mapping("/a", "Git")), result)
+    }
+
+    @Test
+    fun expandDedupesDetectedAgainstExplicit() {
+        val result = RootsModel.expandDefaultMapping(
+            mappings = listOf(Mapping("", "Git"), Mapping("/a", "SVN")),
+            detected = listOf(Mapping("/a/", "Git"), Mapping("/b", "Git")),
+            exclude = emptySet(),
+        )
+        assertEquals(listOf(Mapping("/a", "SVN"), Mapping("/b", "Git")), result)
+    }
+
+    @Test
+    fun expandNormalizesExclude() {
+        val result = RootsModel.expandDefaultMapping(
+            mappings = listOf(Mapping("", "Git")),
+            detected = listOf(Mapping("/a", "Git"), Mapping("/b", "Git")),
+            exclude = setOf("/b/"),
+        )
+        assertEquals(listOf(Mapping("/a", "Git")), result)
+    }
+
+    @Test
+    fun expandRemovesExplicitMappingInExclude() {
+        val result = RootsModel.expandDefaultMapping(
+            mappings = listOf(Mapping("", "Git"), Mapping("/x", "SVN")),
+            detected = listOf(Mapping("/x", "Git")),
+            exclude = setOf("/x"),
+        )
+        assertEquals(emptyList<Mapping>(), result)
+    }
 }

@@ -33,7 +33,13 @@ interface VcsMappingService {
     fun unignoreRoot(directory: String)
 
     /**
-     * Просит платформу повторно обнаружить VCS-корни (VcsRootScanner.scheduleScan).
+     * Полный список обнаруженных платформой корней (включая незарегистрированные).
+     * Сканирует ФС — вызывать только вне EDT.
+     */
+    fun detectedRoots(): List<Mapping>
+
+    /**
+     * Просит платформу повторно обнаружить VCS-корни.
      */
     fun requestRescan()
 }
