@@ -1,0 +1,14 @@
+<idea-plugin>
+    <id>dev.stepanov.gitrootsmanager</id>
+    <name>Git Roots Manager</name>
+    <vendor>stepanov</vendor>
+    <description>Переключение отслеживания git-репозиториев монорепозитория из статус-бара.</description>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.vcs</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <statusBarWidgetFactory id="GitRootsManagerWidget"
+                                implementation="dev.stepanov.gitrootsmanager.ui.GitRootsWidgetFactory"/>
+        <postStartupActivity implementation="dev.stepanov.gitrootsmanager.startup.StartupReapplier"/>
+    </extensions>
+</idea-plugin>
