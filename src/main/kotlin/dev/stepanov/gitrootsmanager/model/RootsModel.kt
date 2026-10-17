@@ -7,13 +7,38 @@ object RootsModel {
         return roots.filterNot { MappingLogic.isProjectRoot(it.directory, projectBasePath) }
     }
 
-    fun unite(mappings: List<Mapping>, disabled: List<DisabledRoot>): List<ManagedRoot> {
-        val trackedDirs = mappings.mapTo(HashSet()) { MappingLogic.normalizeDirectory(it.directory) }
-        val tracked = mappings.map { ManagedRoot(it.directory, it.vcs, tracked = true) }
-        val untracked = disabled
-            .filter { MappingLogic.normalizeDirectory(it.directory) !in trackedDirs }
-            .map { ManagedRoot(it.directory, it.vcs, tracked = false) }
-        return tracked + untracked
+    fun unite(
+        mappings: List<Mapping>,
+        disabled: List<DisabledRoot>,
+        detected: List<Mapping> = emptyList(),
+        projectBasePath: String? = null,
+    ): List<ManagedRoot> {
+        val roots = linkedMapOf<String, ManagedRoot>()
+        val hasDefault = mappings.any { it.directory.isEmpty() }
+        val covered = if (hasDefault) {
+            detected.mapTo(HashSet()) { MappingLogic.normalizeDirectory(it.directory) }
+        } else {
+            emptySet()
+        }
+        for (mapping in mappings) {
+            val directory = MappingLogic.normalizeDirectory(mapping.directory)
+            val isProjectRoot = MappingLogic.isProjectRoot(directory, projectBasePath)
+            if (hasDefault && isProjectRoot) continue
+            roots[directory] = ManagedRoot(
+                directory, mapping.vcs, tracked = true, toggleable = directory.isNotEmpty() && !isProjectRoot,
+            )
+        }
+        for (root in disabled) {
+            val directory = MappingLogic.normalizeDirectory(root.directory)
+            if (directory.isEmpty() || MappingLogic.isProjectRoot(directory, projectBasePath)) continue
+            roots.putIfAbsent(directory, ManagedRoot(directory, root.vcs, tracked = directory in covered))
+        }
+        for (root in detected) {
+            val directory = MappingLogic.normalizeDirectory(root.directory)
+            if (directory.isEmpty() || MappingLogic.isProjectRoot(directory, projectBasePath)) continue
+            roots.putIfAbsent(directory, ManagedRoot(directory, root.vcs, tracked = hasDefault))
+        }
+        return roots.values.toList()
     }
 
     /** Разворачивает `<Project>` в явные маппинги, исключая [exclude]. */

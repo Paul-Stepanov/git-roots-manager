@@ -1,13 +1,14 @@
 package dev.stepanov.gitrootsmanager.ui
 
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.ui.components.JBCheckBox
+import com.intellij.ui.components.JBScrollPane
+import com.intellij.util.ui.JBUI
 import dev.stepanov.gitrootsmanager.core.GitRootsService
 import dev.stepanov.gitrootsmanager.model.ManagedRoot
-import dev.stepanov.gitrootsmanager.platform.PlatformVcsMappingService
 import java.awt.BorderLayout
 import java.awt.GridLayout
 import java.io.File
@@ -18,7 +19,7 @@ import javax.swing.JLabel
 import javax.swing.JPanel
 
 /**
- * Список корней и мгновенное переключение. В режиме `<Project>` детектор
+ * Список корней и мгновенное переключение. Во всех режимах детектор
  * сканирует ФС вне EDT; изменения и перерисовка выполняются на EDT по колбэку.
  */
 class GitRootsDialog(private val project: Project) : DialogWrapper(project, true) {
@@ -33,9 +34,12 @@ class GitRootsDialog(private val project: Project) : DialogWrapper(project, true
         setOKButtonText("Close")
         toggleAllButton.addActionListener { applyToAll() }
         content.add(toggleAllButton, BorderLayout.NORTH)
-        content.add(rootsPanel, BorderLayout.CENTER)
+        val listContainer = JPanel(BorderLayout())
+        listContainer.add(rootsPanel, BorderLayout.NORTH)
+        content.add(JBScrollPane(listContainer), BorderLayout.CENTER)
+        content.preferredSize = JBUI.size(480, 560)
+        isResizable = true
         init()
-        PlatformVcsMappingService.get(project).requestRescan()
         refresh()
     }
 
@@ -46,13 +50,15 @@ class GitRootsDialog(private val project: Project) : DialogWrapper(project, true
 
     override fun createActions(): Array<out Action> = arrayOf(okAction)
 
+    override fun getDimensionServiceKey(): String = "dev.stepanov.gitrootsmanager.dialog"
+
     private fun refresh() {
         GitRootsService.get(project).listRootsAsync(callbackModality()) { roots -> render(roots) }
     }
 
     private fun render(roots: List<ManagedRoot>) {
         currentRoots = roots
-        val toggleable = roots.filter { it.directory.isNotEmpty() }
+        val toggleable = roots.filter { it.toggleable }
         toggleAllButton.text = if (toggleable.any { !it.tracked }) ENABLE_ALL else DISABLE_ALL
         toggleAllButton.isVisible = toggleable.isNotEmpty()
 
@@ -68,10 +74,10 @@ class GitRootsDialog(private val project: Project) : DialogWrapper(project, true
 
     private fun rowFor(root: ManagedRoot): JBCheckBox {
         val checkbox = JBCheckBox(displayPath(root), root.tracked)
-        val toggleable = root.directory.isNotEmpty()
+        val toggleable = root.toggleable
         checkbox.isEnabled = toggleable
         if (!toggleable) {
-            checkbox.toolTipText = DEFAULT_MAPPING_TOOLTIP
+            checkbox.toolTipText = if (root.directory.isEmpty()) DEFAULT_MAPPING_TOOLTIP else PROJECT_ROOT_TOOLTIP
         } else {
             checkbox.addItemListener {
                 GitRootsService.get(project).setTracked(root, checkbox.isSelected, callbackModality()) { refresh() }
@@ -81,7 +87,7 @@ class GitRootsDialog(private val project: Project) : DialogWrapper(project, true
     }
 
     private fun applyToAll() {
-        val target = currentRoots.any { it.directory.isNotEmpty() && !it.tracked }
+        val target = currentRoots.any { it.toggleable && !it.tracked }
         GitRootsService.get(project).setAllTracked(target, currentRoots, callbackModality()) { refresh() }
     }
 
@@ -103,6 +109,7 @@ class GitRootsDialog(private val project: Project) : DialogWrapper(project, true
         const val DISABLE_ALL = "Выключить все"
         const val DIALOG_VGAP = 8
         const val LOADING = "Loading roots…"
+        const val PROJECT_ROOT_TOOLTIP = "Корень проекта; отслеживание не выключается"
         const val DEFAULT_MAPPING_TOOLTIP =
             "Маппинг всего проекта; при первом выключении репозитория " +
                 "будет развёрнут в явные"
