@@ -26,6 +26,21 @@ class MappingLogicTest {
     }
 
     @Test
+    fun isProjectRootMatchesNormalizedBasePath() {
+        assertEquals(true, MappingLogic.isProjectRoot("/repo/", "/repo"))
+    }
+
+    @Test
+    fun isProjectRootMatchesWindowsSeparators() {
+        assertEquals(true, MappingLogic.isProjectRoot("C:/repo", "C:\\repo\\"))
+    }
+
+    @Test
+    fun isProjectRootDoesNotMatchOtherDirectory() {
+        assertEquals(false, MappingLogic.isProjectRoot("/repo/sub", "/repo"))
+    }
+
+    @Test
     fun removeDeletesOnlyTarget() {
         val mappings = listOf(
             Mapping("/a", "Git"),

@@ -41,7 +41,9 @@ class PlatformVcsMappingService(private val project: Project) : VcsMappingServic
         return VcsRootDetector.getInstance(project).detect()
             .mapNotNull { root ->
                 val vcsName = root.vcs?.name ?: return@mapNotNull null
-                Mapping(MappingLogic.normalizeDirectory(root.path.path), vcsName)
+                val directory = MappingLogic.normalizeDirectory(root.path.path)
+                if (MappingLogic.isProjectRoot(directory, project.basePath)) return@mapNotNull null
+                Mapping(directory, vcsName)
             }
     }
 

@@ -6,6 +6,17 @@ import org.junit.Test
 class RootsModelTest {
 
     @Test
+    fun withoutProjectRootDropsBasePathAndKeepsNestedRoots() {
+        assertEquals(
+            listOf(DisabledRoot("/repo/nested", "Git")),
+            RootsModel.withoutProjectRoot(
+                listOf(DisabledRoot("/repo/", "Git"), DisabledRoot("/repo/nested", "Git")),
+                "/repo",
+            ),
+        )
+    }
+
+    @Test
     fun uniteMarksMappingsTracked() {
         val result = RootsModel.unite(
             listOf(Mapping("/a", "Git")),

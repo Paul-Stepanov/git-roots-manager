@@ -1,6 +1,7 @@
 package dev.stepanov.gitrootsmanager.ui
 
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.ui.components.JBCheckBox
@@ -17,10 +18,8 @@ import javax.swing.JLabel
 import javax.swing.JPanel
 
 /**
- * Список git-корней с мгновенным применением по клику чекбокса и
- * кнопкой «включить/выключить все». Чтение списка и применение — асинхронные
- * (детекция в режиме `<Project>` сканирует ФС вне EDT), перерисовка — по
- * колбэку сервиса.
+ * Список корней и мгновенное переключение. В режиме `<Project>` детектор
+ * сканирует ФС вне EDT; изменения и перерисовка выполняются на EDT по колбэку.
  */
 class GitRootsDialog(private val project: Project) : DialogWrapper(project, true) {
 
@@ -48,7 +47,7 @@ class GitRootsDialog(private val project: Project) : DialogWrapper(project, true
     override fun createActions(): Array<out Action> = arrayOf(okAction)
 
     private fun refresh() {
-        GitRootsService.get(project).listRootsAsync { roots -> render(roots) }
+        GitRootsService.get(project).listRootsAsync(callbackModality()) { roots -> render(roots) }
     }
 
     private fun render(roots: List<ManagedRoot>) {
@@ -75,7 +74,7 @@ class GitRootsDialog(private val project: Project) : DialogWrapper(project, true
             checkbox.toolTipText = DEFAULT_MAPPING_TOOLTIP
         } else {
             checkbox.addItemListener {
-                GitRootsService.get(project).setTracked(root, checkbox.isSelected) { refresh() }
+                GitRootsService.get(project).setTracked(root, checkbox.isSelected, callbackModality()) { refresh() }
             }
         }
         return checkbox
@@ -83,7 +82,12 @@ class GitRootsDialog(private val project: Project) : DialogWrapper(project, true
 
     private fun applyToAll() {
         val target = currentRoots.any { it.directory.isNotEmpty() && !it.tracked }
-        GitRootsService.get(project).setAllTracked(target, currentRoots) { refresh() }
+        GitRootsService.get(project).setAllTracked(target, currentRoots, callbackModality()) { refresh() }
+    }
+
+    private fun callbackModality(): ModalityState {
+        // Loading starts before show(); current() would capture a non-modal state.
+        return ModalityState.any()
     }
 
     private fun displayPath(root: ManagedRoot): String {
@@ -100,6 +104,7 @@ class GitRootsDialog(private val project: Project) : DialogWrapper(project, true
         const val DIALOG_VGAP = 8
         const val LOADING = "Loading roots…"
         const val DEFAULT_MAPPING_TOOLTIP =
-            "Маппинг всего проекта; при первом выключении любого репозитория будет развёрнут в явные"
+            "Маппинг всего проекта; при первом выключении репозитория " +
+                "будет развёрнут в явные"
     }
 }

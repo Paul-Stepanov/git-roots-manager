@@ -1,13 +1,15 @@
 package dev.stepanov.gitrootsmanager.model
 
-/**
- * Чистые операции над списком маппингов;
- * сравнение путей выполняется только по нормализованному [Mapping.directory].
- */
+/** Чистые операции над маппингами; пути сравниваются в нормализованном виде. */
 object MappingLogic {
 
+    fun isProjectRoot(directory: String, projectBasePath: String?): Boolean {
+        if (projectBasePath.isNullOrBlank()) return false
+        return normalizeDirectory(directory) == normalizeDirectory(projectBasePath)
+    }
+
     fun normalizeDirectory(directory: String): String {
-        val trimmed = directory.trim()
+        val trimmed = directory.trim().replace('\\', '/')
         if (trimmed.isEmpty() || trimmed == "/") return trimmed
         return trimmed.trimEnd('/')
     }

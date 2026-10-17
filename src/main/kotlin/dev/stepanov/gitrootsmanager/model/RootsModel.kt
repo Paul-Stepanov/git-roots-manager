@@ -1,10 +1,11 @@
 package dev.stepanov.gitrootsmanager.model
 
-/**
- * Объединяет включённые (маппинги платформы) и выключенные (состояние плагина)
- * корни в список для диалога.
- */
+/** Объединяет корни из маппингов и собственного состояния для диалога. */
 object RootsModel {
+
+    fun withoutProjectRoot(roots: List<DisabledRoot>, projectBasePath: String?): List<DisabledRoot> {
+        return roots.filterNot { MappingLogic.isProjectRoot(it.directory, projectBasePath) }
+    }
 
     fun unite(mappings: List<Mapping>, disabled: List<DisabledRoot>): List<ManagedRoot> {
         val trackedDirs = mappings.mapTo(HashSet()) { MappingLogic.normalizeDirectory(it.directory) }
@@ -15,11 +16,7 @@ object RootsModel {
         return tracked + untracked
     }
 
-    /**
-     * Разворачивает дефолт-маппинг `<Project>` (directory = "") в явные:
-     * существующие явные маппинги сохраняются, из обнаруженных добавляются
-     * недостающие, корни из [exclude] (выключаемые) не попадают в результат.
-     */
+    /** Разворачивает `<Project>` в явные маппинги, исключая [exclude]. */
     fun expandDefaultMapping(
         mappings: List<Mapping>,
         detected: List<Mapping>,
