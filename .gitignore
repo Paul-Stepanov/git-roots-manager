@@ -4,3 +4,4 @@ build/
 .superpowers/
 .intellijPlatform/
 .kotlin/
+local.properties

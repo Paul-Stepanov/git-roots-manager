@@ -45,8 +45,8 @@ class RootsModelTest {
         )
 
         assertEquals(20, roots.size)
-        assertEquals(ManagedRoot("/repo", "Git", tracked = true, toggleable = false), roots.first())
-        assertEquals(19, roots.count { !it.tracked && it.toggleable })
+        assertEquals(ManagedRoot("/repo", "Git", tracked = true), roots.first())
+        assertEquals(19, roots.count { !it.tracked })
         assertEquals(false, roots.any { it.directory.isEmpty() })
     }
 
@@ -67,13 +67,45 @@ class RootsModelTest {
     }
 
     @Test
-    fun uniteDoesNotInventDefaultRowFromUnmappedSources() {
+    fun uniteShowsDisabledDefaultMappingAsUntrackedProjectRow() {
         assertEquals(
-            emptyList<ManagedRoot>(),
+            listOf(ManagedRoot("", "Git", tracked = false)),
             RootsModel.unite(
                 mappings = emptyList(),
                 disabled = listOf(DisabledRoot("", "Git")),
                 detected = listOf(Mapping("", "Git")),
+            ),
+        )
+    }
+
+    @Test
+    fun uniteShowsProjectRootUntrackedWhenMappingMissing() {
+        assertEquals(
+            listOf(
+                ManagedRoot("/repo", "Git", tracked = false),
+                ManagedRoot("/repo/nested", "Git", tracked = false),
+            ),
+            RootsModel.unite(
+                mappings = emptyList(),
+                disabled = emptyList(),
+                detected = listOf(Mapping("/repo", "Git"), Mapping("/repo/nested", "Git")),
+                projectBasePath = "/repo",
+            ),
+        )
+    }
+
+    @Test
+    fun uniteShowsDisabledProjectRootAsUntracked() {
+        assertEquals(
+            listOf(
+                ManagedRoot("/repo", "Git", tracked = false),
+                ManagedRoot("/repo/nested", "Git", tracked = false),
+            ),
+            RootsModel.unite(
+                mappings = emptyList(),
+                disabled = listOf(DisabledRoot("/repo", "Git"), DisabledRoot("/repo/nested", "Git")),
+                detected = emptyList(),
+                projectBasePath = "/repo",
             ),
         )
     }
@@ -107,7 +139,7 @@ class RootsModelTest {
         val mappings = MappingLogic.addMapping(listOf(Mapping("/repo", "Git")), "/repo/nested", "Git")
         assertEquals(
             listOf(
-                ManagedRoot("/repo", "Git", tracked = true, toggleable = false),
+                ManagedRoot("/repo", "Git", tracked = true),
                 ManagedRoot("/repo/nested", "Git", tracked = true),
             ),
             RootsModel.unite(
@@ -115,30 +147,6 @@ class RootsModelTest {
                 disabled = emptyList(),
                 detected = listOf(Mapping("/repo/nested", "Git")),
                 projectBasePath = "/repo",
-            ),
-        )
-    }
-
-    @Test
-    fun disablingAllToggleableRootsKeepsDetectedBaseMapping() {
-        val mappings = listOf(Mapping("", "Git"))
-        val detected = listOf(Mapping("/repo", "Git"), Mapping("/repo/nested", "Git"))
-        val roots = RootsModel.unite(mappings, emptyList(), detected, projectBasePath = "/repo")
-        val excluded = roots.filter { it.toggleable }.mapTo(HashSet()) { it.directory }
-
-        assertEquals(
-            listOf(Mapping("/repo", "Git")),
-            RootsModel.expandDefaultMapping(mappings, detected, excluded),
-        )
-    }
-
-    @Test
-    fun withoutProjectRootDropsBasePathAndKeepsNestedRoots() {
-        assertEquals(
-            listOf(DisabledRoot("/repo/nested", "Git")),
-            RootsModel.withoutProjectRoot(
-                listOf(DisabledRoot("/repo/", "Git"), DisabledRoot("/repo/nested", "Git")),
-                "/repo",
             ),
         )
     }

@@ -9,6 +9,7 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
 import dev.stepanov.gitrootsmanager.core.GitRootsService
 import dev.stepanov.gitrootsmanager.model.ManagedRoot
+import dev.stepanov.gitrootsmanager.model.MappingLogic
 import java.awt.BorderLayout
 import java.awt.GridLayout
 import java.io.File
@@ -19,8 +20,8 @@ import javax.swing.JLabel
 import javax.swing.JPanel
 
 /**
- * Список корней и мгновенное переключение. Во всех режимах детектор
- * сканирует ФС вне EDT; изменения и перерисовка выполняются на EDT по колбэку.
+ * Список корней и мгновенное переключение. Детектор сканирует ФС вне EDT;
+ * изменения и перерисовка выполняются на EDT по колбэку.
  */
 class GitRootsDialog(private val project: Project) : DialogWrapper(project, true) {
 
@@ -58,9 +59,8 @@ class GitRootsDialog(private val project: Project) : DialogWrapper(project, true
 
     private fun render(roots: List<ManagedRoot>) {
         currentRoots = roots
-        val toggleable = roots.filter { it.toggleable }
-        toggleAllButton.text = if (toggleable.any { !it.tracked }) ENABLE_ALL else DISABLE_ALL
-        toggleAllButton.isVisible = toggleable.isNotEmpty()
+        toggleAllButton.text = if (roots.any { !it.tracked }) ENABLE_ALL else DISABLE_ALL
+        toggleAllButton.isVisible = roots.isNotEmpty()
 
         rootsPanel.removeAll()
         if (roots.isEmpty()) {
@@ -74,20 +74,19 @@ class GitRootsDialog(private val project: Project) : DialogWrapper(project, true
 
     private fun rowFor(root: ManagedRoot): JBCheckBox {
         val checkbox = JBCheckBox(displayPath(root), root.tracked)
-        val toggleable = root.toggleable
-        checkbox.isEnabled = toggleable
-        if (!toggleable) {
-            checkbox.toolTipText = if (root.directory.isEmpty()) DEFAULT_MAPPING_TOOLTIP else PROJECT_ROOT_TOOLTIP
-        } else {
-            checkbox.addItemListener {
-                GitRootsService.get(project).setTracked(root, checkbox.isSelected, callbackModality()) { refresh() }
-            }
+        checkbox.toolTipText = when {
+            root.directory.isEmpty() -> DEFAULT_MAPPING_TOOLTIP
+            MappingLogic.isProjectRoot(root.directory, project.basePath) -> PROJECT_ROOT_TOOLTIP
+            else -> null
+        }
+        checkbox.addItemListener {
+            GitRootsService.get(project).setTracked(root, checkbox.isSelected, callbackModality()) { refresh() }
         }
         return checkbox
     }
 
     private fun applyToAll() {
-        val target = currentRoots.any { it.toggleable && !it.tracked }
+        val target = currentRoots.any { !it.tracked }
         GitRootsService.get(project).setAllTracked(target, currentRoots, callbackModality()) { refresh() }
     }
 
@@ -109,9 +108,8 @@ class GitRootsDialog(private val project: Project) : DialogWrapper(project, true
         const val DISABLE_ALL = "Выключить все"
         const val DIALOG_VGAP = 8
         const val LOADING = "Loading roots…"
-        const val PROJECT_ROOT_TOOLTIP = "Корень проекта; отслеживание не выключается"
+        const val PROJECT_ROOT_TOOLTIP = "Корень проекта"
         const val DEFAULT_MAPPING_TOOLTIP =
-            "Маппинг всего проекта; при первом выключении репозитория " +
-                "будет развёрнут в явные"
+            "Маппинг всего проекта; выключение отключит отслеживание целиком"
     }
 }

@@ -7,5 +7,4 @@ data class ManagedRoot(
     val directory: String,
     val vcs: String,
     val tracked: Boolean,
-    val toggleable: Boolean = directory.isNotEmpty(),
 )

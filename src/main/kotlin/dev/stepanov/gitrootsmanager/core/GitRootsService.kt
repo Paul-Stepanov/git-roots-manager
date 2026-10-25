@@ -15,9 +15,9 @@ import dev.stepanov.gitrootsmanager.state.DisabledRootsState
 import dev.stepanov.gitrootsmanager.ui.GitRootsWidgetFactory
 
 /**
- * Управляет корнями, включая `<Project>`: первое выключение разворачивает
- * дефолт-маппинг. Детекция идёт вне EDT, изменения маппингов — на EDT.
- * Асинхронные методы вызывают колбэк на EDT.
+ * Управляет корнями, включая корень проекта и `<Project>`-маппинг: выключение
+ * запоминает вид маппинга, включение возвращает его. Детекция идёт вне EDT,
+ * изменения маппингов — на EDT. Асинхронные методы вызывают колбэк на EDT.
  */
 @Service(Service.Level.PROJECT)
 class GitRootsService(private val project: Project) {
@@ -44,11 +44,7 @@ class GitRootsService(private val project: Project) {
         modalityState: ModalityState,
         onDone: () -> Unit = {},
     ) {
-        if (root.directory.isEmpty() || MappingLogic.isProjectRoot(root.directory, project.basePath)) {
-            onDone()
-            return
-        }
-        if (hasDefaultMapping()) {
+        if (hasDefaultMapping() && root.directory.isNotEmpty()) {
             setTrackedInDefaultMode(root, tracked, modalityState, onDone)
             return
         }
@@ -58,14 +54,14 @@ class GitRootsService(private val project: Project) {
             val restoredVcs = state.find(root.directory)?.vcs ?: root.vcs
             state.remove(root.directory)
             vcs.applyMappings(MappingLogic.addMapping(vcs.currentMappings(), root.directory, restoredVcs))
-            vcs.unignoreRoot(root.directory)
+            ignoredDirectory(root.directory)?.let { vcs.unignoreRoot(it) }
         } else {
             vcs.applyMappings(MappingLogic.removeMapping(vcs.currentMappings(), root.directory))
             state.add(DisabledRoot(root.directory, root.vcs))
-            vcs.ignoreRoot(root.directory)
+            ignoredDirectory(root.directory)?.let { vcs.ignoreRoot(it) }
             vcs.requestRescan()
         }
-        updateWidgetAvailability()
+        refreshWidget()
         onDone()
     }
 
@@ -80,11 +76,12 @@ class GitRootsService(private val project: Project) {
             return
         }
         knownRoots
-            .filter { it.toggleable && it.tracked != tracked }
+            .filter { it.tracked != tracked }
             .forEach { setTracked(it, tracked, modalityState) }
         onDone()
     }
 
+    /** Дефолт-режим: включение снимает «выключено», выключение разворачивает `<Project>`. */
     private fun setTrackedInDefaultMode(
         root: ManagedRoot,
         tracked: Boolean,
@@ -96,7 +93,7 @@ class GitRootsService(private val project: Project) {
         if (tracked) {
             state.remove(root.directory)
             vcs.unignoreRoot(root.directory)
-            updateWidgetAvailability()
+            refreshWidget()
             onDone()
             return
         }
@@ -108,11 +105,12 @@ class GitRootsService(private val project: Project) {
             state.add(DisabledRoot(root.directory, root.vcs))
             vcs.ignoreRoot(root.directory)
             vcs.requestRescan()
-            updateWidgetAvailability()
+            refreshWidget()
             onDone()
         }
     }
 
+    /** Полное выключение снимает маппинги разом, не разворачивая дефолт в явные. */
     private fun setAllTrackedInDefaultMode(
         tracked: Boolean,
         modalityState: ModalityState,
@@ -123,25 +121,35 @@ class GitRootsService(private val project: Project) {
         if (tracked) {
             val disabled = state.getDisabled()
             state.setDisabled(emptyList())
-            disabled.forEach { vcs.unignoreRoot(it.directory) }
-            updateWidgetAvailability()
+            disabled.forEach { ignoredDirectory(it.directory)?.let(vcs::unignoreRoot) }
+            refreshWidget()
             onDone()
             return
         }
         runDetached(modalityState) { detected ->
-            val roots = listRoots().filter { it.toggleable }
-            val excluded = roots.mapTo(HashSet()) { it.directory }
-            vcs.applyMappings(RootsModel.expandDefaultMapping(vcs.currentMappings(), detected, excluded))
-            state.setDisabled(roots.map { DisabledRoot(it.directory, it.vcs) })
-            roots.forEach { vcs.ignoreRoot(it.directory) }
+            val defaultVcs = vcs.currentMappings()
+                .firstOrNull { it.directory.isEmpty() }?.vcs
+            if (defaultVcs == null) {
+                onDone()
+                return@runDetached
+            }
+            vcs.applyMappings(emptyList())
+            state.setDisabled(detected.map { DisabledRoot(it.directory, it.vcs) } + DisabledRoot("", defaultVcs))
+            detected.forEach { vcs.ignoreRoot(it.directory) }
+            ignoredDirectory("")?.let(vcs::ignoreRoot)
             vcs.requestRescan()
-            updateWidgetAvailability()
+            refreshWidget()
             onDone()
         }
     }
 
     private fun hasDefaultMapping(): Boolean {
         return PlatformVcsMappingService.get(project).currentMappings().any { it.directory.isEmpty() }
+    }
+
+    /** `<Project>` кодируется пустой строкой, а от детектора прячется сам корень проекта. */
+    private fun ignoredDirectory(directory: String): String? {
+        return if (directory.isEmpty()) project.basePath else directory
     }
 
     private fun runDetached(modalityState: ModalityState, onDetected: (List<Mapping>) -> Unit) {
@@ -164,7 +172,7 @@ class GitRootsService(private val project: Project) {
         }, modalityState)
     }
 
-    private fun updateWidgetAvailability() {
+    fun refreshWidget() {
         WindowManager.getInstance().getStatusBar(project)
             ?.updateWidget(GitRootsWidgetFactory.WIDGET_ID)
     }

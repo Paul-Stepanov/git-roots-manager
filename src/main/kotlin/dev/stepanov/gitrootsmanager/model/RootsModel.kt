@@ -3,10 +3,6 @@ package dev.stepanov.gitrootsmanager.model
 /** Объединяет корни из маппингов и собственного состояния для диалога. */
 object RootsModel {
 
-    fun withoutProjectRoot(roots: List<DisabledRoot>, projectBasePath: String?): List<DisabledRoot> {
-        return roots.filterNot { MappingLogic.isProjectRoot(it.directory, projectBasePath) }
-    }
-
     fun unite(
         mappings: List<Mapping>,
         disabled: List<DisabledRoot>,
@@ -22,20 +18,18 @@ object RootsModel {
         }
         for (mapping in mappings) {
             val directory = MappingLogic.normalizeDirectory(mapping.directory)
-            val isProjectRoot = MappingLogic.isProjectRoot(directory, projectBasePath)
-            if (hasDefault && isProjectRoot) continue
-            roots[directory] = ManagedRoot(
-                directory, mapping.vcs, tracked = true, toggleable = directory.isNotEmpty() && !isProjectRoot,
-            )
+            // при дефолт-маппинге корень проекта показывается строкой <Project>
+            if (hasDefault && MappingLogic.isProjectRoot(directory, projectBasePath)) continue
+            roots[directory] = ManagedRoot(directory, mapping.vcs, tracked = true)
         }
         for (root in disabled) {
             val directory = MappingLogic.normalizeDirectory(root.directory)
-            if (directory.isEmpty() || MappingLogic.isProjectRoot(directory, projectBasePath)) continue
+            if (hasDefault && MappingLogic.isProjectRoot(directory, projectBasePath)) continue
             roots.putIfAbsent(directory, ManagedRoot(directory, root.vcs, tracked = directory in covered))
         }
         for (root in detected) {
             val directory = MappingLogic.normalizeDirectory(root.directory)
-            if (directory.isEmpty() || MappingLogic.isProjectRoot(directory, projectBasePath)) continue
+            if (hasDefault && MappingLogic.isProjectRoot(directory, projectBasePath)) continue
             roots.putIfAbsent(directory, ManagedRoot(directory, root.vcs, tracked = hasDefault))
         }
         return roots.values.toList()
